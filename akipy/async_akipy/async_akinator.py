@@ -24,14 +24,13 @@ SOFTWARE.
 """
 import json
 import re
-import asyncio
 
 try:
     import httpx
 except ImportError:
     raise ImportError('httpx is not installed')
 
-from ..dicts import HEADERS, THEME_ID, THEMES, LANG_MAP
+from ..dicts import THEME_ID, THEMES, LANG_MAP
 from ..exceptions import InvalidLanguageError, CantGoBackAnyFurther
 from ..utils import get_answer_id, async_request_handler
 
@@ -53,6 +52,7 @@ class Akinator:
         self.lang = None
         self.available_themes = None
         self.theme = None
+        self.continuing = False
 
         self.question = None
         self.progression = None
@@ -61,27 +61,30 @@ class Akinator:
         self.step_last_proposition = ""
 
         self.win = False
+        self.guesses = []
         self.name_proposition = None
         self.description_proposition = None
-        self.completion = None
 
     async def __update(self, action: str, resp):
         if action == "answer":
             self.akitude = resp['akitude']
-            self.step = resp['step']
+            self.step = int(resp['step'])
             self.progression = resp['progression']
             self.question = resp['question']
         elif action == "back":
             self.akitude = resp['akitude']
-            self.step = resp['step']
+            self.step = int(resp['step'])
             self.progression = resp['progression']
             self.question = resp['question']
         elif action == "win":
             self.win = True
-            self.name_proposition = resp['name_proposition']
-            self.description_proposition = resp['description_proposition']
+            guess = {
+                'name': resp['name_proposition'],
+                'description': resp['description_proposition'],
+                'picture': resp['photo']
+            }
+            self.guesses = [guess]
             self.pseudo = resp['pseudo']
-            self.photo = resp['photo']
 
     async def __get_region(self, lang):
         try:
@@ -92,18 +95,15 @@ class Akinator:
         except Exception:
             raise InvalidLanguageError(lang)
         url = f"https://{lang}.akinator.com"
-        try:
-            req = await async_request_handler(url=url, method='GET')
-            if req.status_code != 200:
-                raise httpx.HTTPStatusError
-            else:
-                self.uri = url
-                self.lang = lang
+        req = await async_request_handler(url=url, method='GET')
+        if req.status_code != 200:
+            raise httpx.HTTPStatusError
+        else:
+            self.uri = url
+            self.lang = lang
 
-                self.available_themes = THEMES[lang]
-                self.theme = THEME_ID[self.available_themes[0]]
-        except Exception as e:
-            raise e
+            self.available_themes = THEMES[lang]
+            self.theme = THEME_ID[self.available_themes[0]]
 
     async def __initialise(self):
         url = f"{self.uri}/game"
@@ -141,29 +141,30 @@ class Akinator:
         await self.__initialise()
 
     async def answer(self, option):
-        url = f"{self.uri}/answer"
         data = {
             "step": self.step,
             "progression": self.progression,
             "sid": self.theme,
             "cm": str(self.child_mode).lower(),
-            "answer": get_answer_id(option),
-            "step_last_proposition": self.step_last_proposition,
             "session": self.session,
             "signature": self.signature,
         }
 
-        try:
-            req = await async_request_handler(url=url, method='POST', data=data)
-            resp = json.loads(req.text)
+        if self.continuing:
+            url = f"{self.uri}/exclude"
+        else:
+            data["answer"] = get_answer_id(option),
+            data["step_last_proposition"] = self.step_last_proposition,
 
-            if re.findall(r"id_proposition", str(resp)):
-                await self.__update(action="win", resp=resp)
-            else:
-                await self.__update(action="answer", resp=resp)
-            self.completion = resp['completion']
-        except Exception as e:
-            raise e
+            url = f"{self.uri}/answer"
+
+        req = await async_request_handler(url=url, method='POST', data=data)
+        resp = json.loads(req.text)
+
+        if re.findall(r"id_proposition", str(resp)):
+            await self.__update(action="win", resp=resp)
+        else:
+            await self.__update(action="answer", resp=resp)
 
     async def back(self):
         if self.step == 1:
@@ -179,9 +180,6 @@ class Akinator:
                 "signature": self.signature,
             }
 
-            try:
-                req = await async_request_handler(url=url, method='POST', data=data)
-                resp = json.loads(req.text)
-                await self.__update(action="back", resp=resp)
-            except Exception as e:
-                raise e
+            req = await async_request_handler(url=url, method='POST', data=data)
+            resp = json.loads(req.text)
+            await self.__update(action="back", resp=resp)
