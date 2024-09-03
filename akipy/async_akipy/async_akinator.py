@@ -152,6 +152,7 @@ class Akinator:
 
         if self.continuing:
             url = f"{self.uri}/exclude"
+            self.step += 1
         else:
             data["answer"] = get_answer_id(option),
             data["step_last_proposition"] = self.step_last_proposition,
