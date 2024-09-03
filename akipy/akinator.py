@@ -64,7 +64,7 @@ class Akinator:
         self.description_proposition = None
         self.completion = None
 
-    def start_game(self, language: str | None = "en", child_mode: bool = False):
+    def start_game(self, language = "en", child_mode: bool = False):
         """
         This method is responsible for actually starting the game scene.
         You can pass the following parameters to set your language preference and as well as the Child Mode.
