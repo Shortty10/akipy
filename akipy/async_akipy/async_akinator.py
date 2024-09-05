@@ -61,9 +61,7 @@ class Akinator:
         self.step_last_proposition = ""
 
         self.win = False
-        self.guesses = []
-        self.name_proposition = None
-        self.description_proposition = None
+        self.guess = None
 
     async def __update(self, action: str, resp):
         if action == "answer":
@@ -83,8 +81,7 @@ class Akinator:
                 'description': resp['description_proposition'],
                 'picture': resp['photo']
             }
-            self.guesses = [guess]
-            self.pseudo = resp['pseudo']
+            self.guess = guess
 
     async def __get_region(self, lang):
         try:
@@ -152,7 +149,6 @@ class Akinator:
 
         if self.continuing:
             url = f"{self.uri}/exclude"
-            self.step += 1
         else:
             data["answer"] = get_answer_id(option),
             data["step_last_proposition"] = self.step_last_proposition,
